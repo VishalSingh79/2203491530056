@@ -1,4 +1,4 @@
-//Calculator
+// Calculator Application
 
 const express = require('express');
 const axios = require('axios');
@@ -6,81 +6,73 @@ const axios = require('axios');
 const app = express();
 const PORT = 9876;
 const WINDOW_SIZE = 10;
-const THIRD_PARTY_API_BASE_URL = 'http://20.244.56.144/evaluation-service';
-const ACCESS_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiZXhwIjoxNzQ4NTAwMTMyLCJpYXQiOjE3NDg0OTk4MzIsImlzcyI6IkFmZm9yZG1lZCIsImp0aSI6ImI3YWY3NzE3LTUxMzktNGJhMi1hYmZjLTc5ZGYzNGE2MGYxYSIsInN1YiI6InNpbmdodmlzaGFsNjg2MDMwQGdtYWlsLmNvbSJ9LCJlbWFpbCI6InNpbmdodmlzaGFsNjg2MDMwQGdtYWlsLmNvbSIsIm5hbWUiOiJ2aXNoYWwgc2luZ2giLCJyb2xsTm8iOiIyMjAzNDkxNTMwMDU2IiwiYWNjZXNzQ29kZSI6Im5ybXZCTiIsImNsaWVudElEIjoiYjdhZjc3MTctNTEzOS00YmEyLWFiZmMtNzlkZjM0YTYwZjFhIiwiY2xpZW50U2VjcmV0IjoiSHRmVEpaYmdWVVpZRHNrZCJ9.KwTHL9OsE-xMYkdJF6zo6kL1cJgIuPAZFxeTgBYOX_M';
-let numberWindow = [];
+const API_BASE_URL = 'http://20.244.56.144/evaluation-service';
+const BEARER_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiZXhwIjoxNzQ4NTAwMTMyLCJpYXQiOjE3NDg0OTk4MzIsImlzcyI6IkFmZm9yZG1lZCIsImp0aSI6ImI3YWY3NzE3LTUxMzktNGJhMi1hYmZjLTc5ZGYzNGE2MGYxYSIsInN1YiI6InNpbmdodmlzaGFsNjg2MDMwQGdtYWlsLmNvbSJ9LCJlbWFpbCI6InNpbmdodmlzaGFsNjg2MDMwQGdtYWlsLmNvbSIsIm5hbWUiOiJ2aXNoYWwgc2luZ2giLCJyb2xsTm8iOiIyMjAzNDkxNTMwMDU2IiwiYWNjZXNzQ29kZSI6Im5ybXZCTiIsImNsaWVudElEIjoiYjdhZjc3MTctNTEzOS00YmEyLWFiZmMtNzlkZjM0YTYwZjFhIiwiY2xpZW50U2VjcmV0IjoiSHRmVEpaYmdWVVpZRHNrZCJ9.KwTHL9OsE-xMYkdJF6zo6kL1cJgIuPAZFxeTgBYOX_M';
 
-const fetchNumbers = async (numberId) => {
-    let url = '';
-    switch (numberId) {
-        case 'p':
-            url = `${THIRD_PARTY_API_BASE_URL}/primes`;
-            break;
-        case 'f':
-            url = `${THIRD_PARTY_API_BASE_URL}/fibo`;
-            break;
-        case 'e':
-            url = `${THIRD_PARTY_API_BASE_URL}/even`;
-            break;
-        case 'r':
-            url = `${THIRD_PARTY_API_BASE_URL}/rand`;
-            break;
-        default:
-            return null; 
-    }
+let slidingWindow = [];
+
+const getApiEndpoint = (type) => {
+    const endpoints = {
+        p: '/primes',
+        f: '/fibo',
+        e: '/even',
+        r: '/rand'
+    };
+    return endpoints[type] ? `${API_BASE_URL}${endpoints[type]}` : null;
+};
+
+const getNumbersFromApi = async (type) => {
+    const endpoint = getApiEndpoint(type);
+    if (!endpoint) return null;
 
     try {
-        const response = await axios.get(url, {
+        const { data, status } = await axios.get(endpoint, {
             headers: {
-                'Authorization': `Bearer ${ACCESS_TOKEN}`
-            },
+                Authorization: `Bearer ${BEARER_TOKEN}`
+            }
         });
-        if (response.status === 200 && response.data) {
-            return response.data.numbers;
-        } else {
-            return null; 
-        }
-    } catch (error) {
-     
+
+        return status === 200 ? data.numbers : null;
+    } catch (err) {
+        console.error('Error fetching from API:', err.message);
         return null;
     }
 };
 
-app.get('/numbers/:numberid', async (req, res) => {
-    const numberId = req.params.numberid;  
-    console.log(numberId);
-    const windowPrevState = [...numberWindow];
 
-    const newNumbers = await fetchNumbers(numberId);
+app.get('/numbers/:type', async (req, res) => {
+    const type = req.params.type;
+    const previousWindow = [...slidingWindow];
 
-    if (newNumbers) {
+    const newNumbers = await getNumbersFromApi(type);
 
-        newNumbers.forEach(num => {
-            if (!numberWindow.includes(num)) {
-                if (numberWindow.length < WINDOW_SIZE) {
-                    numberWindow.push(num);
+    if (newNumbers && Array.isArray(newNumbers)) {
+        for (const num of newNumbers) {
+            if (!slidingWindow.includes(num)) {
+                if (slidingWindow.length < WINDOW_SIZE) {
+                    slidingWindow.push(num);
                 } else {
-                    numberWindow.shift();
-                    numberWindow.push(num);
+                    slidingWindow.shift();
+                    slidingWindow.push(num);
                 }
             }
-        });
+        }
     }
 
-    const windowCurrState = [...numberWindow]; 
-
-
-    const sum = numberWindow.reduce((acc, num) => acc + num, 0);
-    const avg = numberWindow.length > 0 ? sum / numberWindow.length : 0;
+    const currentWindow = [...slidingWindow];
+    const average = slidingWindow.length > 0
+        ? parseFloat((slidingWindow.reduce((sum, val) => sum + val, 0) / slidingWindow.length).toFixed(2))
+        : 0;
 
     res.json({
-        windowPrevState: windowPrevState,
-        windowCurrState: windowCurrState,
-        numbers: newNumbers,
-        avg: parseFloat(avg.toFixed(2)) 
+        windowPrevState: previousWindow,
+        windowCurrState: currentWindow,
+        numbers: newNumbers || [],
+        avg: average
     });
 });
 
+
 app.listen(PORT, () => {
-    console.log(`Port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
